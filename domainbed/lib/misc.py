@@ -215,8 +215,12 @@ def accuracy(network, loader, weights, device):
     weights_offset = 0
 
     network.eval()
+    loader_list = list(loader)
+    batch_size = loader_list[0][0].shape[0] #error would be reported if len of last batch != batch_size
     with torch.no_grad():
         for x, y in loader:
+            if x.shape[0] != batch_size:
+                continue
             x = x.to(device)
             y = y.to(device)
             p = network.predict(x)

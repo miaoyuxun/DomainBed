@@ -94,6 +94,7 @@ if __name__ == "__main__":
         device = "cuda"
     else:
         device = "cpu"
+    print(device)
 
     if args.dataset in vars(datasets):
         dataset = vars(datasets)[args.dataset](args.data_dir,

@@ -29,6 +29,7 @@ def stage_path(data_dir, name):
 
 
 def download_and_extract(url, dst, remove=True):
+    print(url)
     gdown.download(url, dst, quiet=False)
 
     if dst.endswith(".tar.gz"):
@@ -297,8 +298,8 @@ if __name__ == "__main__":
     # download_pacs(args.data_dir)
     # download_office_home(args.data_dir)
     # download_domain_net(args.data_dir)
-    # download_vlcs(args.data_dir)
-    download_terra_incognita(args.data_dir)
+    download_vlcs(args.data_dir)
+    # download_terra_incognita(args.data_dir)
     # download_spawrious(args.data_dir)
     # download_sviro(args.data_dir)
     # Camelyon17Dataset(root_dir=args.data_dir, download=True)

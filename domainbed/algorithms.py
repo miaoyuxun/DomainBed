@@ -4,7 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
-
+from functools import partial
+from .spikeformer import Spiking_vit_MetaFormer, param_groups_lrd
+from spikingjelly.activation_based import functional
 import copy
 import numpy as np
 from collections import OrderedDict
@@ -21,6 +23,7 @@ from domainbed.lib.misc import (
             LARS,  SupConLossLambda
     )
 
+import timm.optim.optim_factory as optim_factory
 
 ALGORITHMS = [
     'ERM',
@@ -56,6 +59,7 @@ ALGORITHMS = [
     'EQRM',
     'RDM',
     'ADRMX',
+    'Spikeformer',
 ]
 
 def get_algorithm_class(algorithm_name):
@@ -2393,3 +2397,62 @@ class ADRMX(Algorithm):
     
     def predict(self, x):
         return self.network(x)
+
+class Spikeformer(Algorithm):
+    def __init__(self, input_shape, num_classes, num_domains, hparams):
+        super(Spikeformer, self).__init__(input_shape, num_classes, num_domains,
+                                  hparams)
+        self.model = Spiking_vit_MetaFormer(
+        img_size_h=input_shape[1],
+        img_size_w=input_shape[2],
+        patch_size=16,
+        embed_dim=[128, 256, 512, 640],
+        num_heads=8,
+        mlp_ratios=4,
+        in_channels=input_shape[0],
+        num_classes=num_classes,
+        qkv_bias=False,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        depths=8,
+        sr_ratios=1
+    )
+        param_groups = param_groups_lrd(
+        self.model,
+        0.05, #args.weight_decay
+        # no_weight_decay_list=model_without_ddp.no_weight_decay(),
+        layer_decay=1.0, #args.layer_decay,
+    )
+        '''
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.hparams["lr"],
+            weight_decay=self.hparams['weight_decay']
+        )
+        '''
+        self.optimizer = torch.optim.AdamW(param_groups, lr=self.hparams["lr"])
+        #self.optimizer = optim_factory.Lamb(param_groups, trust_clip=True, lr=self.hparams["lr"]) #mixed precision
+        #self.loss_scaler = NativeScaler()
+    
+    def update(self, minibatches, unlabeled=None):
+        for i, (x, y) in enumerate(minibatches):
+            #print("updating")
+            #print(x.shape)
+            loss = F.cross_entropy(self.model(x), y)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            torch.cuda.synchronize()
+            functional.reset_net(self.model)
+
+        return {'loss': loss.item()}
+       
+    def predict(self, x):
+        #print("predicting")
+        #print(x.shape)
+        return self.model(x)
+        
+    def train(self):
+        self.model.train(True)
+
+    def eval(self):
+        self.model.train(False)
